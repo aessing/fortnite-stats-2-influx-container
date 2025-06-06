@@ -1,16 +1,19 @@
-# Project Title
+![Header Image](.github/media/repository-open-graph.jpg)
 
-A README file, along with a repository license, contribution guidelines, and a code of conduct, helps you communicate expectations and manage contributions to your project.
+# Fortnite Stats to InfluxDB Container
 
-A README is often the first item a visitor will see when visiting your repository. README files typically include information on:
+Effortlessly collect and store Fortnite player statistics in an InfluxDB time-series database using this ready-to-run Docker container. Perfect for gamers, data enthusiasts, and developers who want to analyze Fortnite stats, build dashboards, or automate data collection.
 
-- What the project does?
-- Why the project is useful?
-- How can users get started with the project?
-- Where can users get help with your project?
-- Who maintains and contributes to the project?
+## 🚀 Features
 
-:exclamation: Please also have a look at the [license](LICENSE) and if the license fits the needs of your project. :exclamation:
+- Fetches Fortnite player stats via API
+- Stores data in InfluxDB for easy querying and visualization
+- Simple Docker-based deployment (Docker & Kubernetes supported)
+- Easily configurable via environment variables
+
+## 📊 Visualization
+
+Connect your InfluxDB instance to [Grafana](https://grafana.com/) or another visualization tool to create dashboards and analyze your Fortnite stats over time.
 
 ---
 
