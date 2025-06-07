@@ -192,6 +192,10 @@ def main():
         stats['player'] = player
         stats['account_id'] = acct_id  # Add account_id to stats
         flat = flatten_stats(stats)
+        # Check for API error in stats (InfluxDB _field = error and _value = UNKNOWN)
+        if ("error" in flat and str(flat["error"]).upper() == "UNKNOWN") or ("_field" in flat and flat["_field"] == "error" and "_value" in flat and str(flat["_value"]).upper() == "UNKNOWN"):
+            print(f"❌  API returned an error for \033[1m{player}\033[0m: error=UNKNOWN. Skipping write.\n")
+            continue
         last = get_last_record(influx, player)
         if last:
             last_fields = {k: v for k, v in last.items() if k in flat}
