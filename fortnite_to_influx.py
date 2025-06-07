@@ -140,6 +140,18 @@ def print_header(title, emoji=""):
     print(f"{emoji}  {title}")
     print("="*60 + "\n")
 
+# Helper to check for API error in stats
+def is_api_error(flat):
+    """Check if the flattened stats indicate an API error (error=UNKNOWN or _field=error/_value=UNKNOWN)."""
+    if "error" in flat and str(flat["error"]).upper() == "UNKNOWN":
+        return True
+    if (
+        "_field" in flat and flat["_field"] == "error" and
+        "_value" in flat and str(flat["_value"]).upper() == "UNKNOWN"
+    ):
+        return True
+    return False
+
 # Main logic
 def main():
     print_header("Fortnite Season Sync", "📅")
@@ -192,6 +204,9 @@ def main():
         stats['player'] = player
         stats['account_id'] = acct_id  # Add account_id to stats
         flat = flatten_stats(stats)
+        if is_api_error(flat):
+            print(f"❌  API returned an error for \033[1m{player}\033[0m: error=UNKNOWN. Skipping write.\n")
+            continue
         last = get_last_record(influx, player)
         if last:
             last_fields = {k: v for k, v in last.items() if k in flat}
