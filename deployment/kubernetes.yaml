@@ -85,6 +85,7 @@ spec:
                     secretKeyRef:
                       key: INFLUXDB_URL
                       name: fortnitestats-secrets
+                - name: INFLUXDB_TOKEN
                   valueFrom:
                     secretKeyRef:
                       key: INFLUXDB_TOKEN
