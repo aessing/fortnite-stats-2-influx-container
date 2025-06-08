@@ -107,6 +107,10 @@ def flatten_stats(stats):
         if isinstance(obj, dict):
             for k, v in obj.items():
                 _flatten(v, f"{prefix}{k}_")
+        elif isinstance(obj, list):
+            for idx, item in enumerate(obj):
+                # Use index in key to preserve all array elements
+                _flatten(item, f"{prefix}{idx}_")
         else:
             flat[prefix[:-1]] = obj
     _flatten(stats)
