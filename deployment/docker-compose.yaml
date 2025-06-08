@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  fortnitestats:
+    image: ghcr.io/aessing/fortnitestats-2-influxdb:0.2.2
+    restart: on-failure
+    environment:
+      FORTNITE_API_TOKEN: ${FORTNITE_API_TOKEN}
+      INFLUXDB_URL: ${INFLUXDB_URL}
+      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN}
+      INFLUXDB_ORG: ${INFLUXDB_ORG}
+      INFLUXDB_BUCKET: ${INFLUXDB_BUCKET}
+    volumes:
+      - ./player.txt:/app/player.txt:ro
+    security_opt:
+      - no-new-privileges:true
+    cap_add:
+      - NET_RAW
+    cap_drop:
+      - ALL
+    read_only: true
+    user: '1000:1000'
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 64M
+        reservations:
+          cpus: '0.15'
+          memory: 32M
