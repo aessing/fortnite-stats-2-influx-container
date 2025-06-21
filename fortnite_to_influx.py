@@ -10,6 +10,27 @@
 # WARRANTIES OF MERCHANTABILITY AND/OR FITNESS FOR A PARTICULAR PURPOSE.
 # =============================================================================
 
+"""
+This script synchronizes Fortnite player statistics and season data into an InfluxDB database.
+
+Features:
+- Fetches Fortnite player stats and season information via API.
+- Stores and updates player stats and season data in InfluxDB.
+- Avoids unnecessary writes by comparing new data with the latest stored data.
+- Handles API errors and rate limits gracefully.
+
+Environment Variables Required:
+- FORTNITE_API_USER_URL: URL for Fortnite user lookup API
+- FORTNITE_API_STATS_URL: URL for Fortnite stats API
+- FORTNITE_API_TOKEN: API token for Fortnite API
+- INFLUXDB_URL: InfluxDB server URL
+- INFLUXDB_TOKEN: InfluxDB access token
+- INFLUXDB_ORG: InfluxDB organization id
+- INFLUXDB_BUCKET: InfluxDB bucket name
+- PLAYER_FILE: Path to file containing Fortnite player names (one per line)
+- SEASONS_API_URL: URL for Fortnite seasons API
+"""
+
 import os
 import requests
 import json
@@ -29,6 +50,8 @@ PLAYER_FILE = os.getenv('PLAYER_FILE')
 SEASONS_API_URL = os.getenv('SEASONS_API_URL')
 
 # Helper to get account id from player name
+# Returns Fortnite account ID for a given player name using the Fortnite API
+# Returns None if not found or on error
 def get_account_id(player_name):
     try:
         resp = requests.get(
@@ -49,6 +72,7 @@ def get_account_id(player_name):
     return None
 
 # Helper to get account id from InfluxDB
+# Returns account_id for a player from InfluxDB if available, else None
 def get_account_id_from_influx(client, player_name):
     query = f'''from(bucket: "{INFLUXDB_BUCKET}")\n  |> range(start: -5y)\n  |> filter(fn: (r) => r["_measurement"] == "player_stats" and r["player"] == "{player_name}")\n  |> last()'''
     try:
@@ -63,6 +87,7 @@ def get_account_id_from_influx(client, player_name):
     return None
 
 # Helper to get stats for account id
+# Returns stats dict for a given account_id, or None on error
 def get_stats(account_id):
     resp = requests.get(API_STATS_URL, headers={'Authorization': FORTNITE_API_TOKEN}, params={'account': account_id})
     if resp.status_code == 200:
@@ -70,6 +95,7 @@ def get_stats(account_id):
     return None
 
 # Helper to get current Fortnite seasons and their start/end times
+# Returns a list of season dicts
 def get_seasons():
     resp = requests.get(SEASONS_API_URL, headers={'Authorization': FORTNITE_API_TOKEN}, params={'lang': 'en'})
     if resp.status_code == 200:
@@ -77,6 +103,7 @@ def get_seasons():
     return []
 
 # Helper to get last record for player from InfluxDB
+# Returns a dict of last stored fields for the player, or None
 def get_last_record(client, player_name):
     query = f'''from(bucket: "{INFLUXDB_BUCKET}")\n  |> range(start: -30d)\n  |> filter(fn: (r) => r["_measurement"] == "player_stats" and r["player"] == "{player_name}")\n  |> last()'''
     tables = client.query_api().query(query, org=INFLUXDB_ORG)
@@ -91,6 +118,7 @@ def get_last_record(client, player_name):
     return None
 
 # Helper to compare stats (updated logic)
+# Returns True if new_stats differ from last_stats, else False
 def stats_changed(new_stats, last_stats):
     if not last_stats:
         return True
@@ -101,6 +129,7 @@ def stats_changed(new_stats, last_stats):
     return filtered_new != filtered_last
 
 # Helper to flatten stats for InfluxDB fields
+# Recursively flattens nested dicts/lists into a flat dict for InfluxDB
 def flatten_stats(stats):
     flat = {}
     def _flatten(obj, prefix=""):
@@ -117,6 +146,7 @@ def flatten_stats(stats):
     return flat
 
 # Helper to get last season record from InfluxDB
+# Returns last stored season fields for a given season_id, or None
 def get_last_season_record(client, season_id):
     query = f'''from(bucket: "{INFLUXDB_BUCKET}")\n  |> range(start: -5y)\n  |> filter(fn: (r) => r["_measurement"] == "fortnite_seasons" and r["season"] == "{season_id}")\n  |> last()'''
     tables = client.query_api().query(query, org=INFLUXDB_ORG)
@@ -130,6 +160,7 @@ def get_last_season_record(client, season_id):
     return None
 
 # Helper to compare season data
+# Returns True if new_season differs from last_season, else False
 def season_changed(new_season, last_season):
     if not last_season:
         return True
@@ -138,13 +169,14 @@ def season_changed(new_season, last_season):
     filtered_last = {k: last_season[k] for k in compare_keys if last_season[k] is not None}
     return filtered_new != filtered_last
 
-# Helper to print headers
+# Helper to print headers for console output
 def print_header(title, emoji=""): 
     print("\n" + "="*60)
     print(f"{emoji}  {title}")
     print("="*60 + "\n")
 
 # Helper to check for API error in stats
+# Returns True if the flattened stats indicate an API error
 def is_api_error(flat):
     """Check if the flattened stats indicate an API error (error=UNKNOWN or _field=error/_value=UNKNOWN)."""
     if "error" in flat and str(flat["error"]).upper() == "UNKNOWN":
@@ -156,12 +188,13 @@ def is_api_error(flat):
         return True
     return False
 
-# Main logic
+# Main logic: Syncs Fortnite seasons and player stats to InfluxDB
 def main():
     print_header("Fortnite Season Sync", "📅")
     influx = InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG)
     write_api = influx.write_api(write_options=SYNCHRONOUS)
 
+    # Sync Fortnite seasons
     seasons = get_seasons()
     for season in seasons:
         season_id = season.get('season')
@@ -189,6 +222,7 @@ def main():
     with open(PLAYER_FILE) as f:
         players = [line.strip() for line in f if line.strip()]
 
+    # Process each player
     for idx, player in enumerate(players, 1):
         print(f"\n{idx:02d}/{len(players):02d} 🔎  Processing: \033[1m{player}\033[0m ...")
         acct_id = get_account_id_from_influx(influx, player)
