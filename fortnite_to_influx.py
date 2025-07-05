@@ -64,11 +64,13 @@ class Config:
         missing = [name for name, value in required.items() if not value]
         
         if missing:
-            print(f"❌ Missing environment variables: {', '.join(missing)}")
+            logger.error(f"Missing environment variables: {', '.join(missing)}")
+            user_logger.error(f"❌ Missing environment variables: {', '.join(missing)}")
             return False
             
         if not os.path.exists(self.player_file):
-            print(f"❌ Player file not found: {self.player_file}")
+            logger.error(f"Player file not found: {self.player_file}")
+            user_logger.error(f"❌ Player file not found: {self.player_file}")
             return False
             
         return True
@@ -78,11 +80,25 @@ class Config:
 # LOGGING SETUP
 # =============================================================================
 
+# Use environment variable to control log level
+log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    level=getattr(logging, log_level, logging.INFO),
+    format='%(asctime)s - %(levelname)s - %(message)s' if log_level == 'DEBUG' else '%(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Create a console handler for user-friendly output
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+console_formatter = logging.Formatter('%(message)s')
+console_handler.setFormatter(console_formatter)
+
+# Add handler for user messages
+user_logger = logging.getLogger(f"{__name__}.user")
+user_logger.addHandler(console_handler)
+user_logger.propagate = False
 
 
 # =============================================================================
@@ -91,9 +107,9 @@ logger = logging.getLogger(__name__)
 
 def print_header(title: str, emoji: str = "") -> None:
     """Print a formatted section header."""
-    print("\n" + "="*60)
-    print(f"{emoji}  {title}")
-    print("="*60 + "\n")
+    user_logger.info("\n" + "="*60)
+    user_logger.info(f"{emoji}  {title}")
+    user_logger.info("="*60 + "\n")
 
 
 def escape_flux_string(value: str) -> str:
@@ -175,7 +191,8 @@ class FortniteAPI:
                 elif response.status_code == 429:
                     # Handle rate limiting
                     wait_time = int(response.headers.get('Retry-After', 60))
-                    print(f"⏳ Rate limited. Waiting {wait_time}s...")
+                    logger.warning(f"Rate limited, waiting {wait_time}s")
+                    user_logger.info(f"⏳ Rate limited. Waiting {wait_time}s...")
                     time.sleep(wait_time)
                 else:
                     # Log the error but don't return - let it retry
@@ -408,15 +425,17 @@ class FortniteSync:
             # Check if update needed
             stored = self.db.get_last_season_data(season_id)
             if not has_data_changed(season_data, stored):
-                print(f"⏩ Season {season_id} unchanged")
+                logger.debug(f"Season {season_id} unchanged")
+                user_logger.info(f"⏩ Season {season_id} unchanged")
                 continue
                 
             # Write update
-            print(f"✅ Updating season {season_id}")
+            logger.info(f"Updating season {season_id}")
+            user_logger.info(f"✅ Updating season {season_id}")
             self.db.write_season(season_id, season_data)
             updates += 1
         
-        print(f"\n📊 Updated {updates} seasons\n")
+        user_logger.info(f"\n📊 Updated {updates} seasons\n")
     
     def sync_players(self) -> None:
         """Synchronize player statistics to InfluxDB."""
@@ -432,23 +451,27 @@ class FortniteSync:
     
     def _sync_player(self, player: str, idx: int, total: int) -> None:
         """Sync a single player's statistics."""
-        print(f"\n[{idx:02d}/{total:02d}] Processing: {player}")
+        user_logger.info(f"\n[{idx:02d}/{total:02d}] Processing: {player}")
         
         # Get account ID
         account_id = self.db.get_stored_account_id(player)
         if account_id:
-            print(f"  ✓ Found account ID in database")
+            logger.debug(f"Found account ID in database for {player}")
+            user_logger.info(f"  ✓ Found account ID in database")
         else:
             account_id = self.api.get_account_id(player)
             if not account_id:
-                print(f"  ✗ Failed to get account ID")
+                logger.error(f"Failed to get account ID for {player}")
+                user_logger.info(f"  ✗ Failed to get account ID")
                 return
-            print(f"  ✓ Retrieved account ID from API")
+            logger.info(f"Retrieved account ID from API for {player}")
+            user_logger.info(f"  ✓ Retrieved account ID from API")
         
         # Get stats
         stats = self.api.get_stats(account_id)
         if not stats:
-            print(f"  ✗ Failed to get stats")
+            logger.error(f"Failed to get stats for {player}")
+            user_logger.info(f"  ✗ Failed to get stats")
             return
         
         # Add metadata
@@ -460,7 +483,8 @@ class FortniteSync:
         
         # Check for errors
         if is_api_error(flat_stats):
-            print(f"  ✗ API returned error")
+            logger.error(f"API returned error for {player}")
+            user_logger.info(f"  ✗ API returned error")
             return
         
         # Check if update needed
@@ -469,12 +493,14 @@ class FortniteSync:
             # Only compare common fields
             stored_filtered = {k: v for k, v in stored.items() if k in flat_stats}
             if not has_data_changed(flat_stats, stored_filtered):
-                print(f"  ⏩ No changes detected")
+                logger.debug(f"No changes detected for {player}")
+                user_logger.info(f"  ⏩ No changes detected")
                 return
         
         # Write update
         self.db.write_player_stats(player, account_id, flat_stats)
-        print(f"  ✅ Stats updated")
+        logger.info(f"Stats updated for {player}")
+        user_logger.info(f"  ✅ Stats updated")
     
     def run(self) -> None:
         """Run the complete synchronization."""
@@ -483,7 +509,8 @@ class FortniteSync:
             self.sync_players()
         finally:
             self.db.close()
-            print("\n✅ Synchronization complete")
+            logger.info("Synchronization complete")
+            user_logger.info("\n✅ Synchronization complete")
 
 
 # =============================================================================
@@ -501,10 +528,11 @@ def main():
         sync = FortniteSync(config)
         sync.run()
     except KeyboardInterrupt:
-        print("\n\n⚠️  Process interrupted")
+        logger.warning("Process interrupted by user")
+        user_logger.info("\n\n⚠️  Process interrupted")
     except Exception as e:
         logger.exception(f"Unexpected error: {e}")
-        print(f"\n❌ Fatal error: {e}")
+        user_logger.error(f"\n❌ Fatal error: {e}")
         sys.exit(1)
 
 
