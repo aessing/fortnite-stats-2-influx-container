@@ -15,12 +15,54 @@ Synchronizes Fortnite player statistics and season data into InfluxDB.
 
 This script fetches data from the Fortnite API and stores it in InfluxDB,
 avoiding unnecessary writes by comparing with existing data.
+
+Environment Variables:
+    FORTNITE_API_USER_URL: URL for Fortnite user lookup API
+        Example: https://fortniteapi.io/v1/lookup
+    
+    FORTNITE_API_STATS_URL: URL for Fortnite player stats API
+        Example: https://fortniteapi.io/v1/stats
+    
+    FORTNITE_API_TOKEN: Authentication token for Fortnite API
+        Get from: https://fortniteapi.io/
+    
+    SEASONS_API_URL: URL for Fortnite seasons data API
+        Example: https://fortniteapi.io/v1/seasons/list
+    
+    INFLUXDB_URL: InfluxDB server URL
+        Example: http://localhost:8086
+    
+    INFLUXDB_TOKEN: InfluxDB authentication token
+        Generate from InfluxDB UI or CLI
+    
+    INFLUXDB_ORG: InfluxDB organization name
+        Example: my-org
+    
+    INFLUXDB_BUCKET: InfluxDB bucket name for data storage
+        Example: fortnite-stats
+    
+    PLAYER_FILE: Path to file containing player names (one per line)
+        Example: /config/players.txt
+    
+    LOG_LEVEL: (Optional) Logging level
+        Default: INFO
+        Options: DEBUG, INFO, WARNING, ERROR
+
+Usage:
+    Set all required environment variables and run:
+    $ python fortnite_to_influx.py
+
+Data Storage:
+    - Season data is stored in measurement "fortnite_seasons"
+    - Player stats are stored in measurement "player_stats"
+    - Both use timestamps for versioning
 """
 
 import os
 import sys
 import time
 import logging
+import textwrap  # Add this import
 from typing import Dict, List, Optional, Any
 
 import requests
@@ -260,13 +302,13 @@ class InfluxDBStore:
     def get_stored_account_id(self, player_name: str) -> Optional[str]:
         """Get account ID from InfluxDB if previously stored."""
         escaped = escape_flux_string(player_name)
-        query = f'''
+        query = textwrap.dedent(f'''
             from(bucket: "{self.config.influx_bucket}")
             |> range(start: {ACCOUNT_ID_LOOKBACK})
             |> filter(fn: (r) => r["_measurement"] == "player_stats" 
                               and r["player"] == "{escaped}")
             |> last()
-        '''
+        ''').strip()
         
         try:
             tables = self.query_api.query(query, org=self.config.influx_org)
@@ -282,26 +324,26 @@ class InfluxDBStore:
     def get_last_player_stats(self, player_name: str) -> Optional[Dict]:
         """Get the most recent stats for a player."""
         escaped = escape_flux_string(player_name)
-        query = f'''
+        query = textwrap.dedent(f'''
             from(bucket: "{self.config.influx_bucket}")
             |> range(start: {PLAYER_STATS_LOOKBACK})
             |> filter(fn: (r) => r["_measurement"] == "player_stats" 
                               and r["player"] == "{escaped}")
             |> last()
-        '''
+        ''').strip()
         
         return self._query_to_dict(query)
     
     def get_last_season_data(self, season_id: str) -> Optional[Dict]:
         """Get the most recent data for a season."""
         escaped = escape_flux_string(str(season_id))
-        query = f'''
+        query = textwrap.dedent(f'''
             from(bucket: "{self.config.influx_bucket}")
             |> range(start: {SEASON_DATA_LOOKBACK})
             |> filter(fn: (r) => r["_measurement"] == "fortnite_seasons" 
                               and r["season"] == "{escaped}")
             |> last()
-        '''
+        ''').strip()
         
         return self._query_to_dict(query)
     
