@@ -165,7 +165,13 @@ class FortniteAPI:
             if response.status_code == 200:
                 data = response.json()
                 if data.get('result'):
-                    return data.get('account_id')
+                    # Fix: Get account_id from the result object
+                    result = data.get('result')
+                    if isinstance(result, dict):
+                        return result.get('account_id')
+                    # If result is the account_id directly (depends on API structure)
+                    elif isinstance(result, str):
+                        return result
                 logger.debug(f"No result for player {player_name}")
             else:
                 logger.error(f"API error {response.status_code} for {player_name}")
@@ -256,7 +262,7 @@ class InfluxDBStore:
         escaped = escape_flux_string(player_name)
         query = f'''
             from(bucket: "{self.config.influx_bucket}")
-            |> range(start: -5y)
+            |> range(start: {ACCOUNT_ID_LOOKBACK})
             |> filter(fn: (r) => r["_measurement"] == "player_stats" 
                               and r["player"] == "{escaped}")
             |> last()
@@ -278,7 +284,7 @@ class InfluxDBStore:
         escaped = escape_flux_string(player_name)
         query = f'''
             from(bucket: "{self.config.influx_bucket}")
-            |> range(start: -30d)
+            |> range(start: {PLAYER_STATS_LOOKBACK})
             |> filter(fn: (r) => r["_measurement"] == "player_stats" 
                               and r["player"] == "{escaped}")
             |> last()
@@ -291,7 +297,7 @@ class InfluxDBStore:
         escaped = escape_flux_string(str(season_id))
         query = f'''
             from(bucket: "{self.config.influx_bucket}")
-            |> range(start: -5y)
+            |> range(start: {SEASON_DATA_LOOKBACK})
             |> filter(fn: (r) => r["_measurement"] == "fortnite_seasons" 
                               and r["season"] == "{escaped}")
             |> last()
@@ -356,12 +362,23 @@ class InfluxDBStore:
 
 
 # =============================================================================
+# CONSTANTS
+# =============================================================================
+
+# Time ranges for InfluxDB queries
+ACCOUNT_ID_LOOKBACK = "-5y"  # How far back to look for account IDs
+PLAYER_STATS_LOOKBACK = "-30d"  # How far back to look for recent player stats
+SEASON_DATA_LOOKBACK = "-5y"  # How far back to look for season data
+
+
+# =============================================================================
 # DATA COMPARISON
 # =============================================================================
 
 def has_data_changed(new_data: Dict, old_data: Optional[Dict]) -> bool:
     """Check if data has changed compared to stored version."""
-    if not old_data:
+    # Fix: Check explicitly for None instead of falsy
+    if old_data is None:
         return True
     
     # Get all keys from both datasets
