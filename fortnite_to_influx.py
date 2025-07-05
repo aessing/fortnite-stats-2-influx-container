@@ -207,6 +207,10 @@ class FortniteAPI:
   def get_account_id(self, player_name: str) -> Optional[str]:
     """Lookup account ID for a player name."""
     try:
+      logger.debug(f"Looking up account ID for player: {player_name}")
+      logger.debug(f"API URL: {self.config.api_user_url}")
+      logger.debug(f"Headers: {self.headers}")
+      
       response = requests.get(
         self.config.api_user_url,
         headers=self.headers,
@@ -214,19 +218,38 @@ class FortniteAPI:
         timeout=self.timeout
       )
       
+      logger.debug(f"Response status: {response.status_code}")
+      logger.debug(f"Response headers: {dict(response.headers)}")
+      
       if response.status_code == 200:
         data = response.json()
+        logger.debug(f"API response: {data}")
+        
+        # Try different possible response structures
+        # Option 1: account_id at root level
+        if 'account_id' in data:
+          logger.info(f"Found account_id at root for {player_name}")
+          return data['account_id']
+        
+        # Option 2: account_id inside result object
         if data.get('result'):
-          # Fix: Get account_id from the result object
-          result = data.get('result')
-          if isinstance(result, dict):
-            return result.get('account_id')
-          # If result is the account_id directly (depends on API structure)
-          elif isinstance(result, str):
-            return result
-        logger.debug(f"No result for player {player_name}")
+          result = data['result']
+          if isinstance(result, dict) and 'account_id' in result:
+            logger.info(f"Found account_id in result object for {player_name}")
+            return result['account_id']
+        
+        # Option 3: account object with id field
+        if 'account' in data:
+          account = data['account']
+          if isinstance(account, dict) and 'id' in account:
+            logger.info(f"Found id in account object for {player_name}")
+            return account['id']
+        
+        # Log the full response structure to understand what we're getting
+        logger.warning(f"Could not find account_id in response for {player_name}. Response: {data}")
       else:
         logger.error(f"API error {response.status_code} for {player_name}")
+        logger.error(f"Response body: {response.text}")
         
     except Exception as e:
       logger.exception(f"Failed to get account ID for {player_name}: {e}")
