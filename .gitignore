@@ -69,8 +69,6 @@ $RECYCLE.BIN/
 
 # ---------------------------- Python ---------------------------- #
 
-pythonenv/
-
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
