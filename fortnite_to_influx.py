@@ -20,7 +20,7 @@ avoiding unnecessary writes by comparing with existing data.
 import os
 import sys
 import time
-import json
+
 import logging
 from datetime import datetime
 from typing import Dict, List, Optional, Any
