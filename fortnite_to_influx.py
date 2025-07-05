@@ -20,9 +20,7 @@ avoiding unnecessary writes by comparing with existing data.
 import os
 import sys
 import time
-
 import logging
-
 from typing import Dict, List, Optional, Any
 
 import requests
@@ -180,17 +178,20 @@ class FortniteAPI:
                     print(f"⏳ Rate limited. Waiting {wait_time}s...")
                     time.sleep(wait_time)
                 else:
-                    logger.error(f"API error {response.status_code}")
-                    return None
+                    # Log the error but don't return - let it retry
+                    logger.error(f"API error {response.status_code} on attempt {attempt + 1}")
                     
             except requests.exceptions.Timeout:
                 logger.warning(f"Timeout on attempt {attempt + 1}")
             except Exception as e:
                 logger.exception(f"Error on attempt {attempt + 1}: {e}")
             
+            # Wait before next retry (except for the last attempt)
             if attempt < max_retries - 1:
                 time.sleep(2 ** attempt)  # Exponential backoff
-                
+        
+        # Only return None after all retries are exhausted
+        logger.error(f"Failed to get stats after {max_retries} attempts")
         return None
     
     def get_seasons(self) -> List[Dict]:
