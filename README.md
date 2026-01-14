@@ -1,6 +1,6 @@
 > [!WARNING]  
 > As the FortniteAPI (https://fortniteapi.io) will be shutdown on March 31st, 2026, I will discontinue maintenance on my script / container.
-> The repository will be set to archive mode.
+> This repository will be archieved.
 
 ![Header Image](.github/media/repository-open-graph.jpg)
 
